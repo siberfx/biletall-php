@@ -3,7 +3,7 @@ Thus project is for demo purpose, if you want to have complete working code as i
 what it includes;
  - Postman Endpoints Collections for ( BiletAll, BiletBank )
  - React code for front-end
- - Laravel 10 project with all working backend api.
+ - Laravel 11 & 12 project with all working backend api.
  - Mentoring and Explainations during your development or you can hire me to achieve your goal.
    
 
