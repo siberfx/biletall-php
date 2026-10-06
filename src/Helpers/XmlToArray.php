@@ -1,78 +1,105 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Siberfx\BiletAll\Helpers;
 
 use DOMDocument;
+use DOMNode;
+use InvalidArgumentException;
 
 class XmlToArray
 {
     /**
      * Convert valid XML to an array.
      *
-     * @param string $xml
-     * @param bool $outputRoot
-     * @return array
+     * Repeated elements become lists, an element that occurs once is returned
+     * directly. Attributes are stored under "@attributes" and, when an element
+     * has both attributes and text, the text is stored under "@content".
+     *
+     * @return array<string, mixed>|string
+     *
+     * @throws InvalidArgumentException when the XML cannot be parsed.
      */
-    public static function convert(string $xml, bool $outputRoot = false)
+    public static function convert(string $xml, bool $outputRoot = false): array|string
     {
-        $array = self::xmlStringToArray($xml);
-        if (!$outputRoot && array_key_exists('@root', $array)) {
-            unset($array['@root']);
-        }
-        return $array;
-    }
+        $document = new DOMDocument;
+        $previous = libxml_use_internal_errors(true);
 
-    protected static function xmlStringToArray($xmlstr)
-    {
-        $doc = new DOMDocument();
-        $doc->loadXML($xmlstr);
-        $root = $doc->documentElement;
-        $output = self::domNodeToArray($root);
-        $output['@root'] = $root->tagName;
+        try {
+            $loaded = $document->loadXML($xml, LIBXML_NONET);
+            $error = libxml_get_last_error();
+        } finally {
+            libxml_clear_errors();
+            libxml_use_internal_errors($previous);
+        }
+
+        if (! $loaded || $document->documentElement === null) {
+            throw new InvalidArgumentException('Invalid XML: '.trim($error ? $error->message : 'empty document'));
+        }
+
+        $output = self::domNodeToArray($document->documentElement);
+
+        if ($outputRoot) {
+            $output = is_array($output) ? $output : ['@content' => $output];
+            $output['@root'] = $document->documentElement->tagName;
+        }
+
         return $output;
     }
 
-    protected static function domNodeToArray($node)
+    /**
+     * @return array<string, mixed>|string
+     */
+    protected static function domNodeToArray(DOMNode $node): array|string
     {
-        $output = [];
-        switch ($node->nodeType) {
-            case XML_CDATA_SECTION_NODE:
-            case XML_TEXT_NODE:
-                $output = trim($node->textContent);
-                break;
-            case XML_ELEMENT_NODE:
-                for ($i = 0, $m = $node->childNodes->length; $i < $m; $i++) {
-                    $child = $node->childNodes->item($i);
-                    $v = self::domNodeToArray($child);
-                    if (isset($child->tagName)) {
-                        $t = $child->tagName;
-                        if (!isset($output[$t])) {
-                            $output[$t] = [];
-                        }
-                        $output[$t][] = $v;
-                    } elseif ($v || $v === '0') {
-                        $output = (string)$v;
-                    }
-                }
-                if ($node->attributes->length && !is_array($output)) { // Has attributes but isn't an array
-                    $output = ['@content' => $output]; // Change output into an array.
-                }
-                if (is_array($output)) {
-                    if ($node->attributes->length) {
-                        $a = [];
-                        foreach ($node->attributes as $attrName => $attrNode) {
-                            $a[$attrName] = (string)$attrNode->value;
-                        }
-                        $output['@attributes'] = $a;
-                    }
-                    foreach ($output as $t => $v) {
-                        if ((count($v) === 1) && is_array($v) && $t !== '@attributes') {
-                            $output[$t] = $v[0];
-                        }
-                    }
-                }
-                break;
+        if ($node->nodeType === XML_CDATA_SECTION_NODE || $node->nodeType === XML_TEXT_NODE) {
+            return trim($node->textContent);
         }
+
+        if ($node->nodeType !== XML_ELEMENT_NODE) {
+            return '';
+        }
+
+        $output = [];
+
+        foreach ($node->childNodes as $child) {
+            $value = self::domNodeToArray($child);
+
+            if ($child->nodeType === XML_ELEMENT_NODE) {
+                // Mixed content: keep the text collected so far next to the elements.
+                if (! is_array($output)) {
+                    $output = ['@content' => $output];
+                }
+
+                $output[$child->tagName][] = $value;
+            } elseif ($value !== '' && $value !== []) {
+                $output = (string) $value;
+            }
+        }
+
+        $hasAttributes = $node->attributes !== null && $node->attributes->length > 0;
+
+        if ($hasAttributes && ! is_array($output)) {
+            $output = ['@content' => $output];
+        }
+
+        if (! is_array($output)) {
+            return $output;
+        }
+
+        foreach ($output as $tag => $value) {
+            if ($tag !== '@content' && is_array($value) && count($value) === 1) {
+                $output[$tag] = $value[0];
+            }
+        }
+
+        if ($hasAttributes) {
+            foreach ($node->attributes as $name => $attribute) {
+                $output['@attributes'][$name] = (string) $attribute->value;
+            }
+        }
+
         return $output;
     }
 }

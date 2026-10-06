@@ -1,72 +1,57 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Siberfx\BiletAll;
 
+use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Support\ServiceProvider;
-use Illuminate\Routing\Router;
+use Siberfx\BiletAll\Services\BiletAllClient;
+use Siberfx\Soap\SoapWrapper;
 
 class BiletAllServiceProvider extends ServiceProvider
 {
     /**
-     * Indicates if loading of the provider is deferred.
-     *
-     * @var bool
+     * Route file inside the app that, when present, replaces the package routes.
      */
-    protected $defer = false;
+    public const string ROUTE_OVERRIDE_PATH = 'routes/siberfx/biletall.php';
 
-    /**
-     * Where the route file lives, both inside the package and in the app (if overwritten).
-     *
-     * @var string
-     */
-    public $routeFilePath = '/routes/siberfx/biletall.php';
-
-    /**
-     * Perform post-registration booting of services.
-     *
-     * @return void
-     */
-    public function boot()
+    public function register(): void
     {
-        $this->setupRoutes($this->app->router);
+        $this->mergeConfigFrom(__DIR__.'/config/biletall.php', 'biletall');
 
-        $this->mergeConfigFrom(
-            __DIR__ . '/config/biletall.php', 'biletall'
-        );
-
-        // publish config file
-        $this->publishes([__DIR__.'/config' => config_path()], 'config');
-
+        $this->app->singleton(BiletAllClient::class, static fn (Application $app): BiletAllClient => new BiletAllClient(
+            $app->make(SoapWrapper::class),
+            $app->make('config')->get('biletall', []),
+        ));
     }
 
-
-    /**
-     * Register any package services.
-     *
-     * @return void
-     */
-    public function register()
+    public function boot(): void
     {
+        $this->registerRoutes();
 
+        if ($this->app->runningInConsole()) {
+            $this->publishes([
+                __DIR__.'/config/biletall.php' => $this->app->configPath('biletall.php'),
+            ], ['biletall-config', 'config']);
+
+            $this->publishes([
+                __DIR__.'/routes/biletall.php' => $this->app->basePath(self::ROUTE_OVERRIDE_PATH),
+            ], 'biletall-routes');
+        }
     }
 
-
-    /**
-     * Define the routes for the application.
-     *
-     * @param  \Illuminate\Routing\Router  $router
-     * @return void
-     */
-    public function setupRoutes(Router $router)
+    protected function registerRoutes(): void
     {
-        // by default, use the routes file provided in vendor
-        $routeFilePathInUse = __DIR__.$this->routeFilePath;
-
-        // but if there's a file with the same name in routes/backpack, use that one
-        if (file_exists(base_path().$this->routeFilePath)) {
-            $routeFilePathInUse = base_path().$this->routeFilePath;
+        if (! config('biletall.routes.enabled', true) || $this->app->routesAreCached()) {
+            return;
         }
 
-        $this->loadRoutesFrom($routeFilePathInUse);
+        $override = $this->app->basePath(self::ROUTE_OVERRIDE_PATH);
+
+        $this->app->make('router')
+            ->prefix((string) config('biletall.routes.prefix', 'bus'))
+            ->middleware(config('biletall.routes.middleware', []))
+            ->group(file_exists($override) ? $override : __DIR__.'/routes/biletall.php');
     }
 }

@@ -1,23 +1,96 @@
 <?php
 
-// Bus Specs which ships from soap as 50 characters string
+declare(strict_types=1);
+
 return [
 
-    'biletAll' => [
-            'sandbox' => env('BILETALL_SANDBOX', false),
-            'test' => [
-                'url' => 'http://62.248.56.228/WSTEST/Service.asmx?wsdl',
-                'username' => env('BILETALL_WS_USERNAME', 'xxxxxxxxxx'),
-                'password' => env('BILETALL_WS_PASSWORD', 'xxxxx'),
-            ],
-            'live' => [
-                'url' => 'https://ws.biletall.com/Service.asmx?wsdl',
-                'username' => env('BILETALL_WS_USERNAME', 'xxxxxxxxxx'),
-                'password' => env('BILETALL_WS_PASSWORD', 'xxxxx'),
-            ],
+    /*
+    |--------------------------------------------------------------------------
+    | Environment & credentials
+    |--------------------------------------------------------------------------
+    |
+    | When sandbox is enabled the test WSDL is used, otherwise the live one.
+    |
+    */
+
+    'sandbox' => (bool) env('BILETALL_SANDBOX', false),
+
+    'username' => env('BILETALL_WS_USERNAME'),
+
+    'password' => env('BILETALL_WS_PASSWORD'),
+
+    'wsdl' => [
+        'test' => env('BILETALL_TEST_WSDL', 'http://62.248.56.228/WSTEST/Service.asmx?wsdl'),
+        'live' => env('BILETALL_LIVE_WSDL', 'https://ws.biletall.com/Service.asmx?wsdl'),
     ],
 
-    'set' => [
+    /*
+    |--------------------------------------------------------------------------
+    | SOAP client
+    |--------------------------------------------------------------------------
+    |
+    | Options for the "biletall" service registered in siberfx/laravel-soap.
+    | Any key supported by Soap::add() can be used here.
+    |
+    */
+
+    'soap' => [
+        'soap_version' => SOAP_1_2,
+        'trace' => (bool) env('BILETALL_TRACE', false),
+        'cache' => (int) env('BILETALL_WSDL_CACHE', WSDL_CACHE_BOTH),
+        'connection_timeout' => (int) env('BILETALL_CONNECTION_TIMEOUT', 30),
+        'verify_ssl' => (bool) env('BILETALL_VERIFY_SSL', true),
+        'encoding' => 'UTF-8',
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Routes
+    |--------------------------------------------------------------------------
+    |
+    | Publish routes/siberfx/biletall.php to override the package routes.
+    |
+    */
+
+    'routes' => [
+        'enabled' => (bool) env('BILETALL_ROUTES', true),
+        'prefix' => 'bus',
+        'middleware' => [],
+    ],
+
+    // Seconds to cache the KaraNoktaGetirKomut location list.
+    'locations_cache_ttl' => (int) env('BILETALL_LOCATIONS_TTL', 3600),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Default feature flags
+    |--------------------------------------------------------------------------
+    |
+    | A real OTipOzellik value: every character is the true (1) / false (0)
+    | state of the feature whose "tip" equals its position, e.g. position 3
+    | is WC. When enabled it is used instead of the value BiletAll returns,
+    | which is useful against the test service. null = only in "local".
+    |
+    */
+
+    'default_feature_flags' => env('BILETALL_DEFAULT_FEATURE_FLAGS', '11111111001000100000000000000000000000000000000000'),
+
+    'use_default_feature_flags' => env('BILETALL_USE_DEFAULT_FEATURE_FLAGS'),
+
+    // Public path (resolved with asset()) holding the feature images below.
+    'feature_image_path' => 'images/bus-features',
+
+    /*
+    |--------------------------------------------------------------------------
+    | Bus features
+    |--------------------------------------------------------------------------
+    |
+    | OTipOzellik is shipped as a string of 0/1 flags; the position of each
+    | "1" is the "tip" of an available feature.
+    |
+    */
+
+    'features' => [
         [
             'tip' => 0,
             'tip_aciklama' => 'İnternet',
