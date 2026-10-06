@@ -1,4 +1,12 @@
 # Siberfx\BiletAll
+
+[![Latest Version on Packagist](https://img.shields.io/packagist/v/siberfx/biletall-php.svg)](https://packagist.org/packages/siberfx/biletall-php)
+[![Tests](https://github.com/siberfx/biletall-php/actions/workflows/tests.yml/badge.svg)](https://github.com/siberfx/biletall-php/actions/workflows/tests.yml)
+[![PHP Version](https://img.shields.io/packagist/dependency-v/siberfx/biletall-php/php.svg)](https://packagist.org/packages/siberfx/biletall-php)
+[![Laravel](https://img.shields.io/badge/laravel-12.x%20%7C%2013.x-FF2D20.svg)](https://laravel.com)
+[![Total Downloads](https://img.shields.io/packagist/dt/siberfx/biletall-php.svg)](https://packagist.org/packages/siberfx/biletall-php)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE.md)
+
 Thus project is for demo purpose, if you want to have complete working code as in https://demo.ucuzyolu.com you can contact me.
 what it includes;
  - Postman Endpoints Collections for ( BiletAll, BiletBank )
@@ -89,6 +97,66 @@ $trips = $result['NewDataSet']['Table'] ?? [];
 Parameter values are XML-escaped, `null` becomes an empty element and a list repeats the element.
 A SOAP fault or unreadable response throws `Siberfx\BiletAll\Exceptions\BiletAllException`,
 which Laravel renders as a `502` JSON response.
+
+### Calling the endpoints
+
+``` bash
+# Bus stops matching "ank"
+curl "https://your-app.test/bus/kara-noktasi-bul?term=ank"
+
+# Trips for a date
+curl -X POST https://your-app.test/bus/sefer-ara \
+  -H "Accept: application/json" \
+  -d KalkisNoktaID=738 -d VarisNoktaID=84 -d Tarih=2026-12-06
+```
+
+``` json
+{
+    "success": true,
+    "data": [
+        {
+            "ID": "1",
+            "FirmaAdi": "Demo Turizm",
+            "Saat": "2026-12-06T21:30:00+03:00",
+            "BiletFiyatiInternet": "750",
+            "Ozellikler": [
+                { "id": 3, "title": "WC", "description": "Araçta Tuvalet Bulunmaktadır.", "image": "https://your-app.test/images/bus-features/WC.gif" }
+            ]
+        }
+    ]
+}
+```
+
+Validation errors return `422` with an `errors` object; an empty result returns
+`{"success": false, "data": [], "message": "Hiç bir kayıt bulunamadı"}`.
+
+### Bus features
+
+`OTipOzellik` is a string of `0`/`1` flags: the character at position *n* tells whether the feature
+with `tip` *n* in `biletall.features` is available (position 3 = WC, position 10 = 220V socket…).
+
+``` php
+use Siberfx\BiletAll\Helpers\BusSpecHelper;
+
+BusSpecHelper::handle('0001000000100');
+// [['id' => 3, 'title' => 'WC', ...], ['id' => 10, 'title' => '220 Volt Priz', ...]]
+```
+
+The test service does not always return meaningful flags, so in the `local` environment the
+reference string in `biletall.default_feature_flags` is decoded instead. Force it on or off anywhere
+with `BILETALL_USE_DEFAULT_FEATURE_FLAGS=true|false`.
+
+## Examples
+
+The [`examples`](examples) folder contains ready-to-adapt snippets:
+
+| File | Shows |
+| ---- | ----- |
+| [01-search-trips.php](examples/01-search-trips.php) | Find bus stops, search trips, sort by price, decode features |
+| [02-bus-detail-and-seats.php](examples/02-bus-detail-and-seats.php) | Seat plan of a trip and seat availability check |
+| [03-pnr.php](examples/03-pnr.php) | PNR lookup and handling `BiletAllException` |
+| [04-custom-controller.php](examples/04-custom-controller.php) | Using `BiletAllClient` in your own controller with caching |
+| [05-testing.php](examples/05-testing.php) | Feature tests with `Soap::fake()` and call assertions |
 
 ## Testing
 
